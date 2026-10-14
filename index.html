@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Trang Trại Bắt Thú</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#173b27;color:white;font-family:Arial,sans-serif;overflow:hidden;touch-action:none}
+#app{height:100dvh;display:flex;flex-direction:column;max-width:900px;margin:auto}
+header{background:#204c30;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:19px;margin:0}
+#stats{font-size:12px;line-height:1.7;text-align:right}
+#top{padding:7px;display:flex;gap:7px;align-items:center;background:#295b37}
+select,button{border:0;border-radius:10px;padding:10px;font-weight:bold;font-size:14px}
+select{min-width:0;flex:1}
+button{background:#ffcf55;color:#3a2a12}
+#message{font-size:13px;text-align:center;padding:7px;background:#355d38}
+#game{display:block;width:100%;flex:1;min-height:0;background:#80bd58;touch-action:none}
+#controls{height:160px;background:#193c2b;display:flex;justify-content:space-around;align-items:center;padding:8px;gap:8px}
+#stick{width:125px;height:125px;border-radius:50%;background:#ffffff20;border:3px solid #ffffff65;position:relative;flex-shrink:0;touch-action:none}
+#knob{position:absolute;width:49px;height:49px;border-radius:50%;background:#f3f3f3;border:3px solid #9ba99d;left:35px;top:35px;pointer-events:none}
+.actions{display:flex;flex-direction:column;gap:8px;flex:1;max-width:180px}
+.actions button{height:45px}
+#sneak{background:#8ee7a3}
+#run{background:#ffb15a}
+#catch{background:#ffdf57}
+#overlay{position:fixed;inset:0;background:#07180de8;display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}
+.panel{background:#f4f0d9;color:#203b24;border-radius:20px;padding:22px;width:min(390px,100%);text-align:center}
+.panel h2{margin-top:0}
+.panel p{line-height:1.5}
+.panel button{width:100%;padding:14px;margin-top:8px;background:#31824a;color:white;font-size:17px}
+.small{font-size:12px;color:#d4e9d4;text-align:center;padding:5px}
+@media(max-height:650px){
+#controls{height:120px}
+#stick{width:95px;height:95px}
+#knob{left:24px;top:24px;width:41px;height:41px}
+.actions button{height:36px;padding:5px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1>🐾 TRANG TRẠI BẮT THÚ</h1>
+<div id="stats">🏆 0 | ⏱️ 90s<br>❤️❤️❤️</div>
+</header>
+
+<div id="top">
+<select id="animalChoice">
+<option value="0">🐰 Thỏ — Khó nhất</option>
+<option value="1">🦆 Vịt</option>
+<option value="2">🦃 Gà tây</option>
+<option value="3">🐄 Bò</option>
+<option value="4">🐑 Cừu</option>
+<option value="5">🐎 Ngựa</option>
+<option value="6">🐐 Dê</option>
+<option value="7">🐖 Heo — Dễ nhất</option>
+</select>
+<button id="start">▶ Bắt đầu</button>
+</div>
+
+<div id="message">Chọn con vật rồi nhấn Bắt đầu!</div>
+<canvas id="game"></canvas>
+
+<div id="controls">
+<div id="stick"><div id="knob"></div></div>
+<div class="actions">
+<button id="sneak">🤫 ĐI LÉN</button>
+<button id="run">💨 CHẠY NHANH</button>
+<button id="catch">✋ BẮT THÚ</button>
+</div>
+</div>
+<div class="small">Kéo vòng tròn để di chuyển • Né bác nông dân!</div>
+</div>
+
+<div id="overlay">
+<div class="panel">
+<h2>🌾 Trang Trại Bắt Thú</h2>
+<p>Điều khiển nhân vật bằng cần gạt cảm ứng. Tiếp cận con vật rồi nhấn BẮT THÚ.</p>
+<p>🤫 Đi lén: chậm nhưng khó bị phát hiện.<br>💨 Chạy nhanh: nhanh nhưng dễ bị đuổi.</p>
+<p>Bắt được thú để ghi điểm. Tránh bác nông dân và cố gắng sống sót!</p>
+<button id="play">🎮 CHƠI NGAY</button>
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const stick=document.getElementById("stick");
+const knob=document.getElementById("knob");
+const stats=document.getElementById("stats");
+const message=document.getElementById("message");
+const overlay=document.getElementById("overlay");
+
+const animals=[
+ {name:"Thỏ",emoji:"🐰",speed:1.65,range:27},
+ {name:"Vịt",emoji:"🦆",speed:1.45,range:24},
+ {name:"Gà tây",emoji:"🦃",speed:1.3,range:22},
+ {name:"Bò",emoji:"🐄",speed:1.12,range:20},
+ {name:"Cừu",emoji:"🐑",speed:1.0,range:18},
+ {name:"Ngựa",emoji:"🐎",speed:.9,range:16},
+ {name:"Dê",emoji:"🐐",speed:.78,range:14},
+ {name:"Heo",emoji:"🐖",speed:.65,range:12}
+];
+
+let W=800,H=600,scale=1;
+let running=false,mode="sneak",score=0,time=90,lives=3;
+let player,animal,farmer,obstacles=[],decor=[];
+let selected=0,last=0,timer=0,raf=0;
+let stickX=0,stickY=0,stickId=null;
+let keys={};
+let caught=0;
+
+function resize(){
+ const r=canvas.getBoundingClientRect();
+ const d=Math.min(window.devicePixelRatio||1,2);
+ canvas.width=Math.round(r.width*d);
+ canvas.height=Math.round(r.height*d);
+ W=r.width;H=r.height;scale=d;
+ ctx.setTransform(d,0,0,d,0,0);
+ draw();
+}
+window.addEventListener("resize",resize);
+
+function rand(a,b){return a+Math.random()*(b-a)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+
+function resetPositions(){
+ player={x:W*.15,y:H*.78,r:15};
+ animal={x:W*.76,y:H*.25,r:16};
+ farmer={x:W*.53,y:H*.52,r:18,alert:0,tx:W*.53,ty:H*.52};
+ obstacles=[];
+ const items=[
+  [0.30,0.24,48,32],[0.48,0.24,55,35],[0.29,0.52,35,45],
+  [0.73,0.57,50,32],[0.48,0.76,65,28],[0.84,0.78,32,42],
+  [0.16,0.40,34,35]
+ ];
+ for(const [x,y,w,h] of items){
+  obstacles.push({x:x*W,y:y*H,w:w*Math.min(W/390,1.4),h:h*Math.min(H/650,1.4)});
+ }
+ decor=[];
+ for(let i=0;i<45;i++)decor.push({x:rand(5,W-5),y:rand(5,H-5),e:Math.random()<.5?"🌼":"🌱"});
+}
+
+function startGame(){
+ selected=Number(document.getElementById("animalChoice").value);
+ score=0;time=90;lives=3;caught=0;
+ mode="sneak";running=true;
+ resetPositions();
+ overlay.style.display="none";
+ message.textContent="🤫 Đi lén đến gần "+animals[selected].name+" rồi nhấn BẮT THÚ!";
+ last=performance.now();
+ cancelAnimationFrame(raf);
+ raf=requestAnimationFrame(loop);
+}
+
+function setMode(m){
+ mode=m;
+ document.getElementById("sneak").style.outline=m==="sneak"?"3px solid white":"none";
+ document.getElementById("run").style.outline=m==="run"?"3px solid white":"none";
+ message.textContent=m==="sneak"?"🤫 Đi lén: chậm, ít bị phát hiện.":"💨 Chạy nhanh: nhanh hơn, nhưng bác nông dân dễ phát hiện!";
+}
+
+document.getElementById("play").onclick=startGame;
+document.getElementById("start").onclick=startGame;
+document.getElementById("sneak").onclick=()=>setMode("sneak");
+document.getElementById("run").onclick=()=>setMode("run");
+
+function catchAnimal(){
+ if(!running)return;
+ const a=animals[selected];
+ if(dist(player,animal)<a.range+player.r){
+  score+=10;
+  caught++;
+  message.textContent="🎉 Bắt được "+a.name+"! +10 điểm. Chọn con vật tiếp theo!";
+  selected=(selected+1)%animals.length;
+  document.getElementById("animalChoice").value=selected;
+  animal.x=rand(W*.68,W*.9);
+  animal.y=rand(H*.12,H*.38);
+  farmer.alert=Math.max(0,farmer.alert-.25);
+ }else{
+  message.textContent="Chưa đủ gần! Hãy di chuyển sát con vật hơn.";
+ }
+}
+document.getElementById("catch").onclick=catchAnimal;
+
+function pointerVector(e){
+ const r=stick.getBoundingClientRect();
+ const x=e.clientX-(r.left+r.width/2);
+ const y=e.clientY-(r.top+r.height/2);
+ const max=r.width*.34;
+ const len=Math.hypot(x,y)||1;
+ const f=Math.min(1,max/len);
+ stickX=x/len*f;stickY=y/len*f;
+ knob.style.left=(r.width/2-24+stickX*max)+"px";
+ knob.style.top=(r.height/2-24+stickY*max)+"px";
+}
+stick.addEventListener("pointerdown",e=>{
+ e.preventDefault();stickId=e.pointerId;
+ stick.setPointerCapture(e.pointerId);pointerVector(e);
+});
+stick.addEventListener("pointermove",e=>{
+ if(e.pointerId===stickId)pointerVector(e);
+});
+function releaseStick(){
+ stickId=null;stickX=0;stickY=0;
+ knob.style.left="calc(50% - 24px)";
+ knob.style.top="calc(50% - 24px)";
+}
+stick.addEventListener("pointerup",releaseStick);
+stick.addEventListener("pointercancel",releaseStick);
+
+window.addEventListener("keydown",e=>{
+ keys[e.key.toLowerCase()]=true;
+ if(e.key==="Shift")setMode("run");
+ if(e.key===" ")catchAnimal();
+});
+window.addEventListener("keyup",e=>{
+ keys[e.key.toLowerCase()]=false;
+ if(e.key==="Shift")setMode("sneak");
+});
+
+function blocked(x,y,r){
+ if(x<r||x>W-r||y<r||y>H-r)return true;
+ return obstacles.some(o=>x+r>o.x&&x-r<o.x+o.w&&y+r>o.y&&y-r<o.y+o.h);
+}
+function moveEntity(obj,dx,dy){
+ if(!blocked(obj.x+dx,obj.y,obj.r))obj.x+=dx;
+ if(!blocked(obj.x,obj.y+dy,obj.r))obj.y+=dy;
+}
+
+function update(dt){
+ if(!running)return;
+ time-=dt;
+ if(time<=0){time=0;endGame("⏰ Hết giờ!");return;}
+
+ let ix=stickX,iy=stickY;
+ if(keys["arrowleft"]||keys["a"])ix-=1;
+ if(keys["arrowright"]||keys["d"])ix+=1;
+ if(keys["arrowup"]||keys["w"])iy-=1;
+ if(keys["arrowdown"]||keys["s"])iy+=1;
+ let len=Math.hypot(ix,iy);
+ if(len>1){ix/=len;iy/=len}
+ const speed=mode==="run"?220:105;
+ moveEntity(player,ix*speed*dt,iy*speed*dt);
+
+ // Con vật bỏ chạy khi người chơi đến gần.
+ const d=dist(player,animal);
+ if(d<140){
+  const dx=animal.x-player.x,dy=animal.y-player.y;
+  const l=Math.hypot(dx,dy)||1;
+  const flee=animals[selected].speed*(mode==="run"?1.7:0.9);
+  moveEntity(animal,dx/l*flee*75*dt,dy/l*flee*75*dt);
+ }
+ animal.x=clamp(animal.x,animal.r,W-animal.r);
+ animal.y=clamp(animal.y,animal.r,H-animal.r);
+
+ // Bác nông dân tìm người chơi nếu nhìn thấy.
+ const visibility=mode==="run"?230:105;
+ const pd=dist(player,farmer);
+ if(pd<visibility)farmer.alert=Math.min(1,farmer.alert+dt*1.6);
+ else farmer.alert=Math.max(0,farmer.alert-dt*.35);
+
+ if(farmer.alert>.25){
+  const dx=player.x-farmer.x,dy=player.y-farmer.y;
+  const l=Math.hypot(dx,dy)||1;
+  const fs=farmer.alert>.75?125:75;
+  moveEntity(farmer,dx/l*fs*dt,dy/l*fs*dt);
+ }else{
+  const dx=farmer.tx-farmer.x,dy=farmer.ty-farmer.y;
+  const l=Math.hypot(dx,dy);
+  if(l<8){farmer.tx=rand(W*.25,W*.8);farmer.ty=rand(H*.2,H*.8)}
+  else moveEntity(farmer,dx/l*32*dt,dy/l*32*dt);
+ }
+ if(pd<player.r+farmer.r+4){
+  lives--;
+  farmer.alert=0;
+  player.x=W*.15;player.y=H*.78;
+  message.textContent="😱 Bác nông dân bắt gặp bạn! Mất 1 mạng.";
+  if(lives<=0){endGame("🚨 Bạn đã bị bắt!");return}
+ }
+ stats.innerHTML="🏆 "+score+" điểm | ⏱️ "+Math.ceil(time)+"s<br>"+"❤️".repeat(lives)+"♡".repeat(3-lives);
+}
+
+function roundedRect(x,y,w,h,r,color){
+ ctx.fillStyle=color;ctx.beginPath();
+ ctx.roundRect(x,y,w,h,r);ctx.fill();
+}
+
+function draw(){
+ if(!W||!H)return;
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle="#83bd58";ctx.fillRect(0,0,W,H);
+
+ // Các luống cỏ.
+ ctx.globalAlpha=.14;ctx.fillStyle="#286b3a";
+ for(let y=0;y<H;y+=48)ctx.fillRect(0,y,W,2);
+ for(let x=0;x<W;x+=48)ctx.fillRect(x,0,2,H);
+ ctx.globalAlpha=1;
+
+ // Lối đi trong trang trại.
+ ctx.fillStyle="#d8c28b";
+ ctx.fillRect(W*.04,H*.58,W*.92,H*.055);
+ ctx.fillRect(W*.57,H*.12,W*.045,H*.82);
+
+ for(const d of decor){
+  ctx.font="13px Arial";ctx.fillText(d.e,d.x,d.y);
+ }
+
+ // Hàng rào bao quanh.
+ ctx.strokeStyle="#6e4729";ctx.lineWidth=7;
+ ctx.strokeRect(4,4,W-8,H-8);
+ ctx.lineWidth=2;
+ for(let x=12;x<W;x+=22){
+  ctx.beginPath();ctx.moveTo(x,5);ctx.lineTo(x,17);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x,H-5);ctx.lineTo(x,H-17);ctx.stroke();
+ }
+
+ // Chướng ngại vật.
+ for(const o of obstacles){
+  roundedRect(o.x+3,o.y+4,o.w,o.h,7,"#315b31");
+  roundedRect(o.x,o.y,o.w,o.h,7,"#a87842");
+  ctx.strokeStyle="#e2b777";ctx.lineWidth=3;
+  ctx.strokeRect(o.x+5,o.y+5,o.w-10,o.h-10);
+  ctx.font="18px Arial";ctx.textAlign="center";
+  ctx.fillText("🪵",o.x+o.w/2,o.y+o.h/2+6);
+ }
+
+ // Bóng nhân vật và con vật.
+ function sprite(obj,emoji,size){
+  ctx.fillStyle="#0003";ctx.beginPath();
+  ctx.ellipse(obj.x,obj.y+size*.34,size*.65,size*.28,0,0,Math.PI*2);ctx.fill();
+  ctx.font=size+"px Arial";ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText(emoji,obj.x,obj.y);
+ }
+ sprite(animal,animals[selected].emoji,35);
+ sprite(player,"🧑‍🌾",34);
+ sprite(farmer,farmer.alert>.25?"👨‍🌾":"🧑‍🌾",38);
+
+ if(farmer.alert>.25){
+  ctx.fillStyle="#ff3b30";ctx.font="bold 18px Arial";
+  ctx.fillText("!",farmer.x,farmer.y-29);
+ }
+ ctx.textBaseline="alphabetic";
+}
+
+function loop(now){
+ if(!running)return;
+ const dt=Math.min((now-last)/1000,.04);
+ last=now;
+ update(dt);draw();
+ if(running)raf=requestAnimationFrame(loop);
+}
+
+function endGame(title){
+ running=false;
+ cancelAnimationFrame(raf);
+ overlay.style.display="flex";
+ overlay.querySelector("h2").textContent=title;
+ overlay.querySelector("p").innerHTML=
+ "🏆 Điểm: <b>"+score+"</b><br>🐾 Số thú bắt được: <b>"+caught+"</b><br>Hãy thử lại để đạt điểm cao hơn!";
+ overlay.querySelector("button").textContent="🔄 CHƠI LẠI";
+}
+
+resize();
+resetPositions();
+draw();
+</script>
+</body>
+</html>
