@@ -1,0 +1,112 @@
+
+const animals = [
+  {name:"Thỏ", emoji:"🐰", speed:1.8, range:25},
+  {name:"Vịt", emoji:"🦆", speed:1.5, range:30},
+  {name:"Gà tây", emoji:"🦃", speed:1.3, range:35},
+  {name:"Bò", emoji:"🐄", speed:1.1, range:40},
+  {name:"Cừu", emoji:"🐑", speed:0.9, range:45},
+  {name:"Ngựa", emoji:"🐴", speed:0.7, range:50},
+  {name:"Dê", emoji:"🐐", speed:0.5, range:55},
+  {name:"Lợn", emoji:"🐷", speed:0.3, range:60}
+];
+
+let selected, x, y, ax, ay, mode, playing;
+let timer;
+
+function startGame() {
+  selected = Number(document.getElementById("animal").value);
+  x = 10;
+  y = 50;
+  ax = 80;
+  ay = 50;
+  mode = "quiet";
+  playing = true;
+
+  document.getElementById("menu").hidden = true;
+  document.getElementById("game").hidden = false;
+  document.getElementById("animal").textContent =
+    animals[selected].emoji;
+  document.getElementById("message").textContent =
+    "Hãy tìm và bắt " + animals[selected].name + "!";
+  draw();
+
+  clearInterval(timer);
+  timer = setInterval(() => {
+    if (!playing) return;
+
+    const dx = x - ax;
+    const dy = y - ay;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < 20) {
+      ax += Math.sign(dx || 1) * animals[selected].speed;
+      ay += Math.sign(dy || 1) * animals[selected].speed;
+      ax = Math.max(5, Math.min(95, ax));
+      ay = Math.max(8, Math.min(95, ay));
+      draw();
+    }
+
+    const farmerDistance = Math.hypot(x - 50, y - 45);
+    if (farmerDistance < 10 && mode === "fast") {
+      document.getElementById("message").textContent =
+        "😱 Chủ trại phát hiện bạn! Hãy đổi đường!";
+    }
+  }, 100);
+}
+
+function setMode(value) {
+  mode = value;
+  document.getElementById("info").textContent =
+    value === "quiet"
+      ? "🤫 Đang đi chậm và yên lặng"
+      : "💨 Đang chạy nhanh!";
+}
+
+function move(dx, dy) {
+  if (!playing) return;
+
+  const speed = mode === "quiet" ? 3 : 8;
+  x = Math.max(3, Math.min(97, x + dx * speed));
+  y = Math.max(5, Math.min(95, y + dy * speed));
+
+  draw();
+}
+
+function draw() {
+  document.getElementById("player").style.left = x + "%";
+  document.getElementById("player").style.top = y + "%";
+  document.getElementById("animal").style.left = ax + "%";
+  document.getElementById("animal").style.top = ay + "%";
+}
+
+function catchAnimal() {
+  if (!playing) return;
+
+  const distance = Math.hypot(x - ax, y - ay);
+  if (distance <= animals[selected].range / 2) {
+    playing = false;
+    clearInterval(timer);
+    document.getElementById("message").textContent =
+      "🎉 Bạn đã bắt được " + animals[selected].name + "!";
+  } else {
+    document.getElementById("message").textContent =
+      "Chưa đủ gần! Hãy tiến lại gần con vật.";
+  }
+}
+
+document.addEventListener("keydown", event => {
+  const keys = {
+    ArrowUp: [0,-1],
+    ArrowDown: [0,1],
+    ArrowLeft: [-1,0],
+    ArrowRight: [1,0]
+  };
+
+  if (keys[event.key]) {
+    event.preventDefault();
+    move(...keys[event.key]);
+  }
+  if (event.key === "1") setMode("quiet");
+  if (event.key === "2") setMode("fast");
+  if (event.key.toLowerCase() === "e") catchAnimal();
+});
